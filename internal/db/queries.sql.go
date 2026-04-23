@@ -58,6 +58,19 @@ func (q *Queries) CreateAthlete(ctx context.Context, arg CreateAthleteParams) (A
 	return i, err
 }
 
+const createBonusLiftDefinition = `-- name: CreateBonusLiftDefinition :one
+INSERT INTO bonus_lift_definitions (name)
+VALUES ($1)
+RETURNING id, name
+`
+
+func (q *Queries) CreateBonusLiftDefinition(ctx context.Context, name string) (BonusLiftDefinition, error) {
+	row := q.db.QueryRow(ctx, createBonusLiftDefinition, name)
+	var i BonusLiftDefinition
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id, user_id, expires_at)
 VALUES ($1, $2, $3)
@@ -100,6 +113,21 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteAthleteBonusLift = `-- name: DeleteAthleteBonusLift :exec
+DELETE FROM athlete_bonus_lifts
+WHERE athlete_id = $1 AND lift_definition_id = $2
+`
+
+type DeleteAthleteBonusLiftParams struct {
+	AthleteID        int32 `json:"athlete_id"`
+	LiftDefinitionID int32 `json:"lift_definition_id"`
+}
+
+func (q *Queries) DeleteAthleteBonusLift(ctx context.Context, arg DeleteAthleteBonusLiftParams) error {
+	_, err := q.db.Exec(ctx, deleteAthleteBonusLift, arg.AthleteID, arg.LiftDefinitionID)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at < NOW()
 `
@@ -116,6 +144,39 @@ DELETE FROM sessions WHERE id = $1
 func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, deleteSession, id)
 	return err
+}
+
+const getAthleteBonusLifts = `-- name: GetAthleteBonusLifts :many
+SELECT bld.name, abl.value, bld.id as definition_id
+FROM athlete_bonus_lifts abl
+JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
+WHERE abl.athlete_id = $1
+`
+
+type GetAthleteBonusLiftsRow struct {
+	Name         string         `json:"name"`
+	Value        pgtype.Numeric `json:"value"`
+	DefinitionID int32          `json:"definition_id"`
+}
+
+func (q *Queries) GetAthleteBonusLifts(ctx context.Context, athleteID int32) ([]GetAthleteBonusLiftsRow, error) {
+	rows, err := q.db.Query(ctx, getAthleteBonusLifts, athleteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAthleteBonusLiftsRow{}
+	for rows.Next() {
+		var i GetAthleteBonusLiftsRow
+		if err := rows.Scan(&i.Name, &i.Value, &i.DefinitionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAthleteByID = `-- name: GetAthleteByID :one
@@ -140,6 +201,17 @@ func (q *Queries) GetAthleteByID(ctx context.Context, id int32) (Athlete, error)
 		&i.UpdatedAt,
 		&i.Bio,
 	)
+	return i, err
+}
+
+const getBonusLiftDefinitionByName = `-- name: GetBonusLiftDefinitionByName :one
+SELECT id, name FROM bonus_lift_definitions WHERE name = $1
+`
+
+func (q *Queries) GetBonusLiftDefinitionByName(ctx context.Context, name string) (BonusLiftDefinition, error) {
+	row := q.db.QueryRow(ctx, getBonusLiftDefinitionByName, name)
+	var i BonusLiftDefinition
+	err := row.Scan(&i.ID, &i.Name)
 	return i, err
 }
 
@@ -236,6 +308,75 @@ func (q *Queries) ListAthletes(ctx context.Context) ([]Athlete, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Bio,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAthletesByBonusLift = `-- name: ListAthletesByBonusLift :many
+SELECT a.id, a.name, a.gender, a.body_weight, a.avatar_url, a.squat, a.bench, a.deadlift, a.total, a.ohp, a.created_at, a.updated_at, a.bio, abl.value as lift_value, bld.name as lift_name
+FROM athletes a
+JOIN athlete_bonus_lifts abl ON a.id = abl.athlete_id
+JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
+WHERE bld.id = $1
+AND (a.gender = $2 OR $2 = '')
+ORDER BY abl.value DESC
+`
+
+type ListAthletesByBonusLiftParams struct {
+	ID     int32       `json:"id"`
+	Gender pgtype.Text `json:"gender"`
+}
+
+type ListAthletesByBonusLiftRow struct {
+	ID         int32              `json:"id"`
+	Name       string             `json:"name"`
+	Gender     pgtype.Text        `json:"gender"`
+	BodyWeight pgtype.Numeric     `json:"body_weight"`
+	AvatarUrl  pgtype.Text        `json:"avatar_url"`
+	Squat      pgtype.Numeric     `json:"squat"`
+	Bench      pgtype.Numeric     `json:"bench"`
+	Deadlift   pgtype.Numeric     `json:"deadlift"`
+	Total      pgtype.Numeric     `json:"total"`
+	Ohp        pgtype.Numeric     `json:"ohp"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Bio        pgtype.Text        `json:"bio"`
+	LiftValue  pgtype.Numeric     `json:"lift_value"`
+	LiftName   string             `json:"lift_name"`
+}
+
+func (q *Queries) ListAthletesByBonusLift(ctx context.Context, arg ListAthletesByBonusLiftParams) ([]ListAthletesByBonusLiftRow, error) {
+	rows, err := q.db.Query(ctx, listAthletesByBonusLift, arg.ID, arg.Gender)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAthletesByBonusLiftRow{}
+	for rows.Next() {
+		var i ListAthletesByBonusLiftRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Gender,
+			&i.BodyWeight,
+			&i.AvatarUrl,
+			&i.Squat,
+			&i.Bench,
+			&i.Deadlift,
+			&i.Total,
+			&i.Ohp,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Bio,
+			&i.LiftValue,
+			&i.LiftName,
 		); err != nil {
 			return nil, err
 		}
@@ -379,6 +520,30 @@ func (q *Queries) ListAthletesSortedByGender(ctx context.Context, arg ListAthlet
 	return items, nil
 }
 
+const listBonusLiftDefinitions = `-- name: ListBonusLiftDefinitions :many
+SELECT id, name FROM bonus_lift_definitions ORDER BY name ASC
+`
+
+func (q *Queries) ListBonusLiftDefinitions(ctx context.Context) ([]BonusLiftDefinition, error) {
+	rows, err := q.db.Query(ctx, listBonusLiftDefinitions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BonusLiftDefinition{}
+	for rows.Next() {
+		var i BonusLiftDefinition
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAthlete = `-- name: UpdateAthlete :one
 UPDATE athletes SET
     name = $2,
@@ -441,4 +606,21 @@ func (q *Queries) UpdateAthlete(ctx context.Context, arg UpdateAthleteParams) (A
 		&i.Bio,
 	)
 	return i, err
+}
+
+const upsertAthleteBonusLift = `-- name: UpsertAthleteBonusLift :exec
+INSERT INTO athlete_bonus_lifts (athlete_id, lift_definition_id, value)
+VALUES ($1, $2, $3)
+ON CONFLICT (athlete_id, lift_definition_id) DO UPDATE SET value = $3
+`
+
+type UpsertAthleteBonusLiftParams struct {
+	AthleteID        int32          `json:"athlete_id"`
+	LiftDefinitionID int32          `json:"lift_definition_id"`
+	Value            pgtype.Numeric `json:"value"`
+}
+
+func (q *Queries) UpsertAthleteBonusLift(ctx context.Context, arg UpsertAthleteBonusLiftParams) error {
+	_, err := q.db.Exec(ctx, upsertAthleteBonusLift, arg.AthleteID, arg.LiftDefinitionID, arg.Value)
+	return err
 }

@@ -24,6 +24,17 @@ type Athlete struct {
 	Bio        pgtype.Text        `json:"bio"`
 }
 
+type AthleteBonusLift struct {
+	AthleteID        int32          `json:"athlete_id"`
+	LiftDefinitionID int32          `json:"lift_definition_id"`
+	Value            pgtype.Numeric `json:"value"`
+}
+
+type BonusLiftDefinition struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+}
+
 type Session struct {
 	ID        string             `json:"id"`
 	UserID    pgtype.Int4        `json:"user_id"`

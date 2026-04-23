@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/blau/strength-leaderboard2/internal/auth"
 	"github.com/blau/strength-leaderboard2/internal/db"
@@ -37,12 +38,64 @@ func (h *LeaderboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If HTMX request, only return the table partial
-	if r.Header.Get("HX-Request") == "true" {
+	if r.Header.Get("HX-Request") == "true" && (r.URL.Path == "/leaderboard" || r.URL.Path == "/") {
 		renderPartial(w, "leaderboard_table", data)
 		return
 	}
 
 	renderPage(w, "leaderboard", data)
+}
+
+func (h *LeaderboardHandler) BonusIndex(w http.ResponseWriter, r *http.Request) {
+	liftIDStr := r.URL.Query().Get("lift_id")
+	gender := r.URL.Query().Get("gender")
+
+	allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
+
+	var selectedLiftID int32
+	if liftIDStr != "" {
+		id, _ := strconv.Atoi(liftIDStr)
+		selectedLiftID = int32(id)
+	} else if len(allBonusLifts) > 0 {
+		selectedLiftID = allBonusLifts[0].ID
+	}
+
+	var bonusAthletes []db.ListAthletesByBonusLiftRow
+	var liftName string
+	if selectedLiftID > 0 {
+		var err error
+		bonusAthletes, err = h.queries.ListAthletesByBonusLift(r.Context(), db.ListAthletesByBonusLiftParams{
+			ID:     selectedLiftID,
+			Gender: pgtype.Text{String: gender, Valid: true},
+		})
+		if err == nil && len(bonusAthletes) > 0 {
+			liftName = bonusAthletes[0].LiftName
+		} else {
+			// Fallback to definition list if query fails or empty
+			for _, l := range allBonusLifts {
+				if l.ID == selectedLiftID {
+					liftName = l.Name
+					break
+				}
+			}
+		}
+	}
+
+	data := pageData{
+		User:                auth.UserFromContext(r.Context()),
+		BonusAthletes:       bonusAthletes,
+		AllBonusLifts:       allBonusLifts,
+		SelectedBonusLiftID: selectedLiftID,
+		BonusLiftName:       liftName,
+		Gender:              gender,
+	}
+
+	if r.Header.Get("HX-Request") == "true" && r.URL.Path == "/other" {
+		renderPartial(w, "bonus_leaderboard_table", data)
+		return
+	}
+
+	renderPage(w, "bonus_leaderboard", data)
 }
 
 func (h *LeaderboardHandler) fetchAthletes(r *http.Request, sort, gender string) ([]db.Athlete, error) {

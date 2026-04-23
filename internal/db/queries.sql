@@ -47,6 +47,41 @@ UPDATE athletes SET
 WHERE id = $1
 RETURNING *;
 
+-- name: ListBonusLiftDefinitions :many
+SELECT * FROM bonus_lift_definitions ORDER BY name ASC;
+
+-- name: GetBonusLiftDefinitionByName :one
+SELECT * FROM bonus_lift_definitions WHERE name = $1;
+
+-- name: CreateBonusLiftDefinition :one
+INSERT INTO bonus_lift_definitions (name)
+VALUES ($1)
+RETURNING *;
+
+-- name: GetAthleteBonusLifts :many
+SELECT bld.name, abl.value, bld.id as definition_id
+FROM athlete_bonus_lifts abl
+JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
+WHERE abl.athlete_id = $1;
+
+-- name: UpsertAthleteBonusLift :exec
+INSERT INTO athlete_bonus_lifts (athlete_id, lift_definition_id, value)
+VALUES ($1, $2, $3)
+ON CONFLICT (athlete_id, lift_definition_id) DO UPDATE SET value = $3;
+
+-- name: DeleteAthleteBonusLift :exec
+DELETE FROM athlete_bonus_lifts
+WHERE athlete_id = $1 AND lift_definition_id = $2;
+
+-- name: ListAthletesByBonusLift :many
+SELECT a.*, abl.value as lift_value, bld.name as lift_name
+FROM athletes a
+JOIN athlete_bonus_lifts abl ON a.id = abl.athlete_id
+JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
+WHERE bld.id = $1
+AND (a.gender = $2 OR $2 = '')
+ORDER BY abl.value DESC;
+
 -- name: GetUserByUsername :one
 SELECT * FROM users WHERE username = $1;
 

@@ -31,11 +31,13 @@ func InitTemplates(templateFS fs.FS) {
 		"templates/layout.html",
 		"templates/partials/nav.html",
 		"templates/partials/leaderboard_table.html",
+		"templates/partials/bonus_leaderboard_table.html",
 		"templates/partials/profile_card.html",
 	}
 
 	pages := []string{
 		"templates/leaderboard.html",
+		"templates/bonus_leaderboard.html",
 		"templates/login.html",
 		"templates/register.html",
 		"templates/profile.html",
@@ -75,14 +77,19 @@ func formatDecimal(n pgtype.Numeric) string {
 }
 
 type pageData struct {
-	User     *auth.SessionUser
-	Athletes []db.Athlete
-	Athlete  *db.Athlete
-	Sort     string
-	Gender   string
-	Error    string
-	Success  string
-	Dialog   bool
+	User                *auth.SessionUser
+	Athletes            []db.Athlete
+	Athlete             *db.Athlete
+	Sort                string
+	Gender              string
+	Error               string
+	Success             string
+	Dialog              bool
+	BonusLifts          []db.GetAthleteBonusLiftsRow
+	AllBonusLifts       []db.BonusLiftDefinition
+	BonusAthletes       []db.ListAthletesByBonusLiftRow
+	SelectedBonusLiftID int32
+	BonusLiftName       string
 }
 
 func renderPage(w http.ResponseWriter, name string, data pageData) {

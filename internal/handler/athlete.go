@@ -38,19 +38,23 @@ func (h *AthleteHandler) View(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bonusLifts, _ := h.queries.GetAthleteBonusLifts(r.Context(), athlete.ID)
+
 	// HTMX requests get just the profile card for dialog
 	if r.Header.Get("HX-Request") == "true" {
 		renderPartial(w, "profile_card", pageData{
-			User:     auth.UserFromContext(r.Context()),
-			Athlete:  &athlete,
-			Dialog:   true,
+			User:       auth.UserFromContext(r.Context()),
+			Athlete:    &athlete,
+			Dialog:     true,
+			BonusLifts: bonusLifts,
 		})
 		return
 	}
 
 	renderPage(w, "profile", pageData{
-		User:    auth.UserFromContext(r.Context()),
-		Athlete: &athlete,
+		User:       auth.UserFromContext(r.Context()),
+		Athlete:    &athlete,
+		BonusLifts: bonusLifts,
 	})
 }
 
@@ -67,9 +71,14 @@ func (h *AthleteHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bonusLifts, _ := h.queries.GetAthleteBonusLifts(r.Context(), athlete.ID)
+	allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
+
 	renderPage(w, "profile_edit", pageData{
-		User:    user,
-		Athlete: &athlete,
+		User:           user,
+		Athlete:        &athlete,
+		BonusLifts:     bonusLifts,
+		AllBonusLifts: allBonusLifts,
 	})
 }
 
@@ -127,11 +136,69 @@ func (h *AthleteHandler) EditSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handle Bonus Lifts (Other Lifts)
+	// Format: bonus_lift_val_{definition_id}
+	for key, values := range r.MultipartForm.Value {
+		if len(values) == 0 {
+			continue
+		}
+		
+		// Check for removal
+		if len(key) > 18 && key[:18] == "bonus_lift_remove_" {
+			defID, _ := strconv.Atoi(key[18:])
+			_ = h.queries.DeleteAthleteBonusLift(r.Context(), db.DeleteAthleteBonusLiftParams{
+				AthleteID:        athlete.ID,
+				LiftDefinitionID: int32(defID),
+			})
+			continue
+		}
+
+		if len(key) > 15 && key[:15] == "bonus_lift_val_" {
+			defID, _ := strconv.Atoi(key[15:])
+			
+			// Check if this lift was marked for removal in the same request
+			if r.FormValue(fmt.Sprintf("bonus_lift_remove_%d", defID)) != "" {
+				continue
+			}
+
+			val := parseDecimal(values[0])
+			if val.Valid {
+				_ = h.queries.UpsertAthleteBonusLift(r.Context(), db.UpsertAthleteBonusLiftParams{
+					AthleteID:        athlete.ID,
+					LiftDefinitionID: int32(defID),
+					Value:            val,
+				})
+			}
+		}
+	}
+
+	// Handle New Bonus Lift
+	newLiftName := r.FormValue("new_bonus_lift_name")
+	newLiftVal := r.FormValue("new_bonus_lift_val")
+	if newLiftName != "" && newLiftVal != "" {
+		val := parseDecimal(newLiftVal)
+		if val.Valid {
+			// Find or create definition
+			def, err := h.queries.GetBonusLiftDefinitionByName(r.Context(), newLiftName)
+			if err != nil {
+				def, _ = h.queries.CreateBonusLiftDefinition(r.Context(), newLiftName)
+			}
+			_ = h.queries.UpsertAthleteBonusLift(r.Context(), db.UpsertAthleteBonusLiftParams{
+				AthleteID:        athlete.ID,
+				LiftDefinitionID: def.ID,
+				Value:            val,
+			})
+		}
+	}
+
+	bonusLifts, _ := h.queries.GetAthleteBonusLifts(r.Context(), athlete.ID)
+
 	if r.Header.Get("HX-Request") == "true" {
 		renderPartial(w, "profile_card", pageData{
-			User:    user,
-			Athlete: &athlete,
-			Success: "Profile updated",
+			User:       user,
+			Athlete:    &athlete,
+			BonusLifts: bonusLifts,
+			Success:    "Profile updated",
 		})
 		return
 	}
