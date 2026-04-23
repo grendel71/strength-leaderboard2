@@ -1,0 +1,36 @@
+{{define "leaderboard"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<!-- Profile Dialog for avatar clicks -->
+<div id="profile-dialog" class="dialog">
+    <div class="dialog-backdrop" onclick="document.getElementById('profile-dialog').classList.remove('open')"></div>
+    <div class="dialog-body"></div>
+</div>
+
+<div class="filters">
+    <h1>Leaderboard</h1>
+    <div class="filter-group">
+        <button
+            hx-get="/leaderboard?sort={{.Sort}}&gender="
+            hx-target="#leaderboard-table" hx-swap="outerHTML"
+            class="filter-btn {{if eq .Gender ""}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+            All
+        </button>
+        <button
+            hx-get="/leaderboard?sort={{.Sort}}&gender=male"
+            hx-target="#leaderboard-table" hx-swap="outerHTML"
+            class="filter-btn {{if eq .Gender "male"}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+            Male
+        </button>
+        <button
+            hx-get="/leaderboard?sort={{.Sort}}&gender=female"
+            hx-target="#leaderboard-table" hx-swap="outerHTML"
+            class="filter-btn {{if eq .Gender "female"}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+            Female
+        </button>
+    </div>
+</div>
+{{template "leaderboard_table" .}}
+{{end}}

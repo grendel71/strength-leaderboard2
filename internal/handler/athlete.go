@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/blau/strength-leaderboard2/internal/auth"
@@ -75,9 +76,9 @@ func (h *AthleteHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
 
 	renderPage(w, "profile_edit", pageData{
-		User:           user,
-		Athlete:        &athlete,
-		BonusLifts:     bonusLifts,
+		User:          user,
+		Athlete:       &athlete,
+		BonusLifts:    bonusLifts,
 		AllBonusLifts: allBonusLifts,
 	})
 }
@@ -137,56 +138,127 @@ func (h *AthleteHandler) EditSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle Bonus Lifts (Other Lifts)
-	// Format: bonus_lift_val_{definition_id}
+	// Inputs:
+	// - bonus_lift_val_{definition_id}
+	// - bonus_lift_distance_{definition_id}
+	// - bonus_lift_reps_{definition_id}
+	// - bonus_lift_remove_{definition_id}
+	type bonusLiftUpdate struct {
+		Remove   bool
+		Value    pgtype.Numeric
+		Distance pgtype.Numeric
+		Reps     pgtype.Int4
+	}
+
+	updates := make(map[int32]*bonusLiftUpdate)
+	getUpdate := func(defID int32) *bonusLiftUpdate {
+		if u, ok := updates[defID]; ok {
+			return u
+		}
+		u := &bonusLiftUpdate{}
+		updates[defID] = u
+		return u
+	}
+
 	for key, values := range r.MultipartForm.Value {
 		if len(values) == 0 {
 			continue
 		}
-		
-		// Check for removal
-		if len(key) > 18 && key[:18] == "bonus_lift_remove_" {
-			defID, _ := strconv.Atoi(key[18:])
+
+		switch {
+		case strings.HasPrefix(key, "bonus_lift_remove_"):
+			defID, _ := strconv.Atoi(strings.TrimPrefix(key, "bonus_lift_remove_"))
+			getUpdate(int32(defID)).Remove = values[0] != ""
+		case strings.HasPrefix(key, "bonus_lift_val_"):
+			defID, _ := strconv.Atoi(strings.TrimPrefix(key, "bonus_lift_val_"))
+			getUpdate(int32(defID)).Value = parseDecimal(values[0])
+		case strings.HasPrefix(key, "bonus_lift_distance_"):
+			defID, _ := strconv.Atoi(strings.TrimPrefix(key, "bonus_lift_distance_"))
+			getUpdate(int32(defID)).Distance = parseDecimal(values[0])
+		case strings.HasPrefix(key, "bonus_lift_reps_"):
+			defID, _ := strconv.Atoi(strings.TrimPrefix(key, "bonus_lift_reps_"))
+			getUpdate(int32(defID)).Reps = parseInt4(values[0])
+		}
+	}
+
+	for defID, u := range updates {
+		if u.Remove {
 			_ = h.queries.DeleteAthleteBonusLift(r.Context(), db.DeleteAthleteBonusLiftParams{
 				AthleteID:        athlete.ID,
-				LiftDefinitionID: int32(defID),
+				LiftDefinitionID: defID,
 			})
 			continue
 		}
 
-		if len(key) > 15 && key[:15] == "bonus_lift_val_" {
-			defID, _ := strconv.Atoi(key[15:])
-			
-			// Check if this lift was marked for removal in the same request
-			if r.FormValue(fmt.Sprintf("bonus_lift_remove_%d", defID)) != "" {
-				continue
-			}
-
-			val := parseDecimal(values[0])
-			if val.Valid {
-				_ = h.queries.UpsertAthleteBonusLift(r.Context(), db.UpsertAthleteBonusLiftParams{
-					AthleteID:        athlete.ID,
-					LiftDefinitionID: int32(defID),
-					Value:            val,
-				})
-			}
+		if !u.Value.Valid && !u.Distance.Valid && !u.Reps.Valid {
+			_ = h.queries.DeleteAthleteBonusLift(r.Context(), db.DeleteAthleteBonusLiftParams{
+				AthleteID:        athlete.ID,
+				LiftDefinitionID: defID,
+			})
+			continue
 		}
+
+		_ = h.queries.UpsertAthleteBonusLift(r.Context(), db.UpsertAthleteBonusLiftParams{
+			AthleteID:        athlete.ID,
+			LiftDefinitionID: defID,
+			Value:            u.Value,
+			Distance:         u.Distance,
+			Reps:             u.Reps,
+		})
 	}
 
-	// Handle New Bonus Lift
+	// Handle New Bonus Lift Definition (admin-only)
 	newLiftName := r.FormValue("new_bonus_lift_name")
-	newLiftVal := r.FormValue("new_bonus_lift_val")
-	if newLiftName != "" && newLiftVal != "" {
-		val := parseDecimal(newLiftVal)
-		if val.Valid {
-			// Find or create definition
-			def, err := h.queries.GetBonusLiftDefinitionByName(r.Context(), newLiftName)
+	if newLiftName != "" {
+		if user.Role != "admin" {
+			athlete, _ := h.queries.GetAthleteByID(r.Context(), user.AthleteID.Int32)
+			bonusLifts, _ := h.queries.GetAthleteBonusLifts(r.Context(), athlete.ID)
+			allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
+			renderPage(w, "profile_edit", pageData{
+				User:          user,
+				Athlete:       &athlete,
+				BonusLifts:    bonusLifts,
+				AllBonusLifts: allBonusLifts,
+				Error:         "Only admins can create new lifts",
+			})
+			return
+		}
+
+		// Find or create definition
+		def, err := h.queries.GetBonusLiftDefinitionByName(r.Context(), newLiftName)
+		if err != nil {
+			enableDistance := r.FormValue("new_bonus_lift_enable_distance") != ""
+			enableReps := r.FormValue("new_bonus_lift_enable_reps") != ""
+			def, err = h.queries.CreateBonusLiftDefinition(r.Context(), db.CreateBonusLiftDefinitionParams{
+				Name:           newLiftName,
+				EnableDistance: enableDistance,
+				EnableReps:     enableReps,
+			})
 			if err != nil {
-				def, _ = h.queries.CreateBonusLiftDefinition(r.Context(), newLiftName)
+				athlete, _ := h.queries.GetAthleteByID(r.Context(), user.AthleteID.Int32)
+				bonusLifts, _ := h.queries.GetAthleteBonusLifts(r.Context(), athlete.ID)
+				allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
+				renderPage(w, "profile_edit", pageData{
+					User:          user,
+					Athlete:       &athlete,
+					BonusLifts:    bonusLifts,
+					AllBonusLifts: allBonusLifts,
+					Error:         "Failed to create lift: " + err.Error(),
+				})
+				return
 			}
+		}
+
+		val := parseDecimal(r.FormValue("new_bonus_lift_val"))
+		distance := parseDecimal(r.FormValue("new_bonus_lift_distance"))
+		reps := parseInt4(r.FormValue("new_bonus_lift_reps"))
+		if val.Valid || distance.Valid || reps.Valid {
 			_ = h.queries.UpsertAthleteBonusLift(r.Context(), db.UpsertAthleteBonusLiftParams{
 				AthleteID:        athlete.ID,
 				LiftDefinitionID: def.ID,
 				Value:            val,
+				Distance:         distance,
+				Reps:             reps,
 			})
 		}
 	}
@@ -220,6 +292,17 @@ func parseDecimal(s string) pgtype.Numeric {
 		Exp:   0,
 		Valid: true,
 	}
+}
+
+func parseInt4(s string) pgtype.Int4 {
+	if s == "" {
+		return pgtype.Int4{Valid: false}
+	}
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return pgtype.Int4{Valid: false}
+	}
+	return pgtype.Int4{Int32: int32(i), Valid: true}
 }
 
 func calcTotal(squat, bench, deadlift pgtype.Numeric) pgtype.Numeric {

@@ -1,0 +1,78 @@
+{{define "profile_card"}} {{if not .Dialog}}
+<div id="profile-card" class="fade-in">
+  {{end}} {{if .Success}}
+  <div class="alert-success">{{.Success}}</div>
+  {{end}} {{if .Error}}
+  <div class="alert-error">{{.Error}}</div>
+  {{end}}
+  <div class="card profile-layout">
+    <div class="profile-pic-col">
+      {{if and .Athlete .Athlete.AvatarUrl.Valid}}
+      <img
+        src="{{.Athlete.AvatarUrl.String}}"
+        alt=""
+        class="profile-pic-large"
+      />
+      {{else}}
+      <div class="profile-pic-placeholder">
+        {{if .Athlete}}{{slice .Athlete.Name 0 1}}{{end}}
+      </div>
+      {{end}}
+    </div>
+    <div class="profile-data-col">
+      <div class="card-name">{{.Athlete.Name}}</div>
+      <div class="card-meta">
+        {{gender .Athlete.Gender}} &middot; {{decimal .Athlete.BodyWeight}} lbs
+      </div>
+      {{if and .Athlete .Athlete.Bio.Valid}}
+      <div class="bio">{{md .Athlete.Bio.String}}</div>
+      {{end}}
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">Squat</div>
+          <div class="stat-value">{{decimal .Athlete.Squat}}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Bench</div>
+          <div class="stat-value">{{decimal .Athlete.Bench}}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Deadlift</div>
+          <div class="stat-value">{{decimal .Athlete.Deadlift}}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Total</div>
+          <div class="stat-value highlight">{{decimal .Athlete.Total}}</div>
+        </div>
+        {{if .Athlete.Ohp.Valid}}
+        <div class="stat-box">
+          <div class="stat-label">OHP</div>
+          <div class="stat-value">{{decimal .Athlete.Ohp}}</div>
+        </div>
+        {{end}} {{if .BonusLifts}}
+        <div class="bonus-lifts">
+          <div class="bonus-title">Other Lifts</div>
+          <div class="bonus-grid">
+            {{range .BonusLifts}}
+            <div class="bonus-box">
+              <div class="bonus-label">{{.Name}}</div>
+              <div class="bonus-value">
+                {{if .Value.Valid}}{{decimal .Value}}{{end}}
+                {{if and .EnableDistance .Distance.Valid}}
+                <div class="mono dim">{{decimal .Distance}} distance</div>
+                {{end}}
+                {{if and .EnableReps .Reps.Valid}}
+                <div class="mono dim">{{int4 .Reps}} reps</div>
+                {{end}}
+              </div>
+            </div>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+  {{if not .Dialog}}
+</div>
+{{end}} {{end}}

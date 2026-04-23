@@ -1,0 +1,75 @@
+{{define "bonus_leaderboard_table"}}
+{{if .IsHTMX}}
+<h1 id="other-lift-title" hx-swap-oob="true">{{if .BonusLiftName}}{{.BonusLiftName}} Leaderboard{{else}}Other Lifts Leaderboard{{end}}</h1>
+<div id="other-metric-select" hx-swap-oob="true">
+  {{if or .SelectedBonusLiftEnableDistance .SelectedBonusLiftEnableReps}}
+  <select name="metric"
+          hx-get="/other"
+          hx-target="#bonus-leaderboard-table"
+          hx-swap="outerHTML"
+          hx-select="#bonus-leaderboard-table"
+          hx-include="[name='lift_id'],[name='gender']"
+          class="form-select" style="width: auto; margin-left: 0.75rem;">
+      <option value="weight" {{if eq .BonusLiftMetric "weight"}}selected{{end}}>Weight</option>
+      {{if .SelectedBonusLiftEnableDistance}}
+      <option value="distance" {{if eq .BonusLiftMetric "distance"}}selected{{end}}>Distance</option>
+      {{end}}
+      {{if .SelectedBonusLiftEnableReps}}
+      <option value="reps" {{if eq .BonusLiftMetric "reps"}}selected{{end}}>Reps</option>
+      {{end}}
+  </select>
+  {{end}}
+</div>
+{{end}}
+<div id="bonus-leaderboard-table" class="fade-in">
+  <input type="hidden" name="gender" value="{{.Gender}}" />
+  <input type="hidden" name="metric" value="{{.BonusLiftMetric}}" />
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50px">#</th>
+          <th>Athlete</th>
+          <th>BW</th>
+          {{if eq .BonusLiftMetric "weight"}}<th class="active">Weight</th>{{else}}<th>Weight</th>{{end}}
+          {{if .SelectedBonusLiftEnableDistance}}
+          {{if eq .BonusLiftMetric "distance"}}<th class="active">Distance (m)</th>{{else}}<th>Distance (m)</th>{{end}}
+          {{end}}
+          {{if .SelectedBonusLiftEnableReps}}
+          {{if eq .BonusLiftMetric "reps"}}<th class="active">Reps</th>{{else}}<th>Reps</th>{{end}}
+          {{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range $i, $a := .BonusAthletes}}
+        <tr>
+          <td class="rank">{{rank $i}}</td>
+          <td>
+            {{if has $a.AvatarUrl}}<img
+              src="{{avatar $a.AvatarUrl}}"
+              alt="{{$a.Name}}"
+              class="avatar clickable"
+              onclick="showProfile({{$a.ID}})"
+            />{{end}}
+            <a href="/athlete/{{$a.ID}}" class="athlete-name">{{$a.Name}}</a>
+            <span class="gender-tag">{{gender $a.Gender}}</span>
+          </td>
+          <td class="mono dim">{{decimal $a.BodyWeight}}</td>
+          {{if eq $.BonusLiftMetric "weight"}}<td class="mono highlight">{{decimal $a.LiftWeight}}</td>{{else}}<td class="mono">{{decimal $a.LiftWeight}}</td>{{end}}
+          {{if $.SelectedBonusLiftEnableDistance}}
+          {{if eq $.BonusLiftMetric "distance"}}<td class="mono highlight">{{if $a.LiftDistance.Valid}}{{decimal $a.LiftDistance}} m{{else}}-{{end}}</td>{{else}}<td class="mono">{{if $a.LiftDistance.Valid}}{{decimal $a.LiftDistance}} m{{else}}-{{end}}</td>{{end}}
+          {{end}}
+          {{if $.SelectedBonusLiftEnableReps}}
+          {{if eq $.BonusLiftMetric "reps"}}<td class="mono highlight">{{int4 $a.LiftReps}}</td>{{else}}<td class="mono">{{int4 $a.LiftReps}}</td>{{end}}
+          {{end}}
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="{{add 4 (add (boolToInt .SelectedBonusLiftEnableDistance) (boolToInt .SelectedBonusLiftEnableReps))}}" class="empty">No entries for this lift yet</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

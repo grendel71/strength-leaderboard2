@@ -1,0 +1,143 @@
+{{define "profile_edit"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div style="margin-bottom:1rem">
+    <a href="/" class="back-link">&larr; Back to leaderboard</a>
+</div>
+<div class="form-wrap">
+    <h1 class="form-title">Edit Profile</h1>
+
+    {{if .Error}}
+    <div class="alert-error">{{.Error}}</div>
+    {{end}}
+
+    <div class="form-card">
+        <form method="POST" action="/profile/edit" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="form-label">Display Name</label>
+                <input type="text" name="name" value="{{.Athlete.Name}}" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Gender</label>
+                <select name="gender" class="form-select">
+                    <option value="male" {{if eq .Athlete.Gender.String "male"}}selected{{end}}>Male</option>
+                    <option value="female" {{if eq .Athlete.Gender.String "female"}}selected{{end}}>Female</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Body Weight (lbs)</label>
+                <input type="number" name="body_weight" step="0.1" value="{{decimal .Athlete.BodyWeight}}" class="form-input" placeholder="225">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Upload Profile Picture</label>
+                <input type="file" name="avatar_file" accept="image/*" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Avatar URL (Alternative to upload)</label>
+                <input type="url" name="avatar_url" value="{{if .Athlete.AvatarUrl.Valid}}{{.Athlete.AvatarUrl.String}}{{end}}" class="form-input" placeholder="https://example.com/photo.jpg">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Bio (Markdown supported)</label>
+                <textarea name="bio" class="form-input" rows="4" placeholder="Tell us about yourself... Supports **bold**, *italic*, lists, and more.">{{if .Athlete.Bio.Valid}}{{.Athlete.Bio.String}}{{end}}</textarea>
+            </div>
+
+            <hr class="form-divider">
+            <div class="form-section-title">Personal Records</div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Squat</label>
+                    <input type="number" name="squat" step="0.5" value="{{decimal .Athlete.Squat}}" class="form-input" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Bench</label>
+                    <input type="number" name="bench" step="0.5" value="{{decimal .Athlete.Bench}}" class="form-input" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Deadlift</label>
+                    <input type="number" name="deadlift" step="0.5" value="{{decimal .Athlete.Deadlift}}" class="form-input" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OHP</label>
+                    <input type="number" name="ohp" step="0.5" value="{{decimal .Athlete.Ohp}}" class="form-input" placeholder="0">
+                </div>
+            </div>
+
+            <hr class="form-divider">
+            <div class="form-section-title">Other Lifts</div>
+            <p class="form-help">These lifts are shown on your profile but not ranked on the main leaderboard.</p>
+
+            <div class="bonus-edit-list">
+                {{range .AllBonusLifts}}
+                {{$defID := .ID}}
+                <div class="form-group bonus-row">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <label class="form-label" style="margin-bottom: 0;">{{.Name}}</label>
+                        <label style="font-size: 0.75rem; color: var(--gruv-red); cursor: pointer;">
+                            <input type="checkbox" name="bonus_lift_remove_{{.ID}}" value="1"> Remove
+                        </label>
+                    </div>
+
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem;">
+                        <input type="number" step="0.5" name="bonus_lift_val_{{.ID}}"
+                               value="{{range $.BonusLifts}}{{if eq .DefinitionID $defID}}{{decimal .Value}}{{end}}{{end}}"
+                               class="form-input" placeholder="Weight">
+
+                        {{if .EnableDistance}}
+                        <input type="number" step="0.1" name="bonus_lift_distance_{{.ID}}"
+                               value="{{range $.BonusLifts}}{{if eq .DefinitionID $defID}}{{decimal .Distance}}{{end}}{{end}}"
+                               class="form-input" placeholder="Distance">
+                        {{end}}
+
+                        {{if .EnableReps}}
+                        <input type="number" step="1" min="0" name="bonus_lift_reps_{{.ID}}"
+                               value="{{range $.BonusLifts}}{{if eq .DefinitionID $defID}}{{int4 .Reps}}{{end}}{{end}}"
+                               class="form-input" placeholder="Reps">
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+
+            {{if isAdmin .User}}
+            <div class="form-divider-mini"></div>
+            <div class="form-section-title-mini">Create New Lift (Admin)</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Lift Name</label>
+                    <input type="text" name="new_bonus_lift_name" class="form-input" placeholder="e.g. Farmer Carry">
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: flex-end; gap: 1rem;">
+                    <label style="font-size: 0.85rem; cursor: pointer;">
+                        <input type="checkbox" name="new_bonus_lift_enable_distance" value="1"> Enable distance
+                    </label>
+                    <label style="font-size: 0.85rem; cursor: pointer;">
+                        <input type="checkbox" name="new_bonus_lift_enable_reps" value="1"> Enable reps
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Initial Weight</label>
+                    <input type="number" step="0.5" name="new_bonus_lift_val" class="form-input" placeholder="Weight">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Initial Distance</label>
+                    <input type="number" step="0.1" name="new_bonus_lift_distance" class="form-input" placeholder="Distance">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Initial Reps</label>
+                    <input type="number" step="1" min="0" name="new_bonus_lift_reps" class="form-input" placeholder="Reps">
+                </div>
+            </div>
+            {{end}}
+
+            <button type="submit" class="btn-primary form-submit">Save Changes</button>
+        </form>
+    </div>
+</div>
+{{end}}

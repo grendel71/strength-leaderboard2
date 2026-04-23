@@ -1,0 +1,82 @@
+{{define "bonus_leaderboard"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<!-- Profile Dialog for avatar clicks -->
+<div id="profile-dialog" class="dialog">
+    <div class="dialog-backdrop" onclick="document.getElementById('profile-dialog').classList.remove('open')"></div>
+    <div class="dialog-body"></div>
+</div>
+
+<div class="filters">
+    <h1 id="other-lift-title">{{if .BonusLiftName}}{{.BonusLiftName}} Leaderboard{{else}}Other Lifts Leaderboard{{end}}</h1>
+    <div class="filter-group">
+        <select name="lift_id" 
+                hx-get="/other" 
+                hx-target="#bonus-leaderboard-table" 
+                 hx-swap="outerHTML" 
+                 hx-select="#bonus-leaderboard-table"
+                 hx-include="[name='gender'],[name='metric']"
+                 class="form-select" style="width: auto;">
+            {{range .AllBonusLifts}}
+            <option value="{{.ID}}" {{if eq .ID $.SelectedBonusLiftID}}selected{{end}}>{{.Name}}</option>
+            {{else}}
+            <option value="">No other lifts created yet</option>
+            {{end}}
+        </select>
+
+        <div id="other-metric-select">
+        {{if or .SelectedBonusLiftEnableDistance .SelectedBonusLiftEnableReps}}
+        <select name="metric"
+                hx-get="/other"
+                hx-target="#bonus-leaderboard-table"
+                hx-swap="outerHTML"
+                hx-select="#bonus-leaderboard-table"
+                hx-include="[name='lift_id'],[name='gender']"
+                class="form-select" style="width: auto; margin-left: 0.75rem;">
+            <option value="weight" {{if eq .BonusLiftMetric "weight"}}selected{{end}}>Weight</option>
+            {{if .SelectedBonusLiftEnableDistance}}
+            <option value="distance" {{if eq .BonusLiftMetric "distance"}}selected{{end}}>Distance</option>
+            {{end}}
+            {{if .SelectedBonusLiftEnableReps}}
+            <option value="reps" {{if eq .BonusLiftMetric "reps"}}selected{{end}}>Reps</option>
+            {{end}}
+        </select>
+        {{end}}
+        </div>
+  
+        <div class="filter-group" style="margin-left: 1rem;">
+            <button
+                hx-get="/other"
+                hx-target="#bonus-leaderboard-table" hx-swap="outerHTML"
+                hx-select="#bonus-leaderboard-table"
+                hx-include="[name='lift_id'],[name='metric']"
+                hx-vals='{"gender":""}'
+                class="filter-btn {{if eq .Gender ""}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+                All
+            </button>
+            <button
+                hx-get="/other"
+                hx-target="#bonus-leaderboard-table" hx-swap="outerHTML"
+                hx-select="#bonus-leaderboard-table"
+                hx-include="[name='lift_id'],[name='metric']"
+                hx-vals='{"gender":"male"}'
+                class="filter-btn {{if eq .Gender "male"}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+                Male
+            </button>
+            <button
+                hx-get="/other"
+                hx-target="#bonus-leaderboard-table" hx-swap="outerHTML"
+                hx-select="#bonus-leaderboard-table"
+                hx-include="[name='lift_id'],[name='metric']"
+                hx-vals='{"gender":"female"}'
+                class="filter-btn {{if eq .Gender "female"}}filter-btn-active{{else}}filter-btn-inactive{{end}}">
+                Female
+            </button>
+        </div>
+    </div>
+</div>
+
+{{template "bonus_leaderboard_table" .}}
+{{end}}

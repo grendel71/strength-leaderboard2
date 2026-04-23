@@ -28,11 +28,15 @@ type AthleteBonusLift struct {
 	AthleteID        int32          `json:"athlete_id"`
 	LiftDefinitionID int32          `json:"lift_definition_id"`
 	Value            pgtype.Numeric `json:"value"`
+	Distance         pgtype.Numeric `json:"distance"`
+	Reps             pgtype.Int4    `json:"reps"`
 }
 
 type BonusLiftDefinition struct {
-	ID   int32  `json:"id"`
-	Name string `json:"name"`
+	ID             int32  `json:"id"`
+	Name           string `json:"name"`
+	EnableDistance bool   `json:"enable_distance"`
+	EnableReps     bool   `json:"enable_reps"`
 }
 
 type Session struct {
@@ -49,4 +53,5 @@ type User struct {
 	AthleteID pgtype.Int4        `json:"athlete_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Role      string             `json:"role"`
 }

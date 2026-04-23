@@ -59,15 +59,26 @@ func (q *Queries) CreateAthlete(ctx context.Context, arg CreateAthleteParams) (A
 }
 
 const createBonusLiftDefinition = `-- name: CreateBonusLiftDefinition :one
-INSERT INTO bonus_lift_definitions (name)
-VALUES ($1)
-RETURNING id, name
+INSERT INTO bonus_lift_definitions (name, enable_distance, enable_reps)
+VALUES ($1, $2, $3)
+RETURNING id, name, enable_distance, enable_reps
 `
 
-func (q *Queries) CreateBonusLiftDefinition(ctx context.Context, name string) (BonusLiftDefinition, error) {
-	row := q.db.QueryRow(ctx, createBonusLiftDefinition, name)
+type CreateBonusLiftDefinitionParams struct {
+	Name           string `json:"name"`
+	EnableDistance bool   `json:"enable_distance"`
+	EnableReps     bool   `json:"enable_reps"`
+}
+
+func (q *Queries) CreateBonusLiftDefinition(ctx context.Context, arg CreateBonusLiftDefinitionParams) (BonusLiftDefinition, error) {
+	row := q.db.QueryRow(ctx, createBonusLiftDefinition, arg.Name, arg.EnableDistance, arg.EnableReps)
 	var i BonusLiftDefinition
-	err := row.Scan(&i.ID, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.EnableDistance,
+		&i.EnableReps,
+	)
 	return i, err
 }
 
@@ -90,7 +101,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password, athlete_id)
 VALUES ($1, $2, $3)
-RETURNING id, username, password, athlete_id, created_at, updated_at
+RETURNING id, username, password, athlete_id, created_at, updated_at, role
 `
 
 type CreateUserParams struct {
@@ -109,6 +120,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AthleteID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -147,16 +159,26 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getAthleteBonusLifts = `-- name: GetAthleteBonusLifts :many
-SELECT bld.name, abl.value, bld.id as definition_id
+SELECT bld.name,
+       abl.value,
+       abl.distance,
+       abl.reps,
+       bld.enable_distance,
+       bld.enable_reps,
+       bld.id as definition_id
 FROM athlete_bonus_lifts abl
 JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
 WHERE abl.athlete_id = $1
 `
 
 type GetAthleteBonusLiftsRow struct {
-	Name         string         `json:"name"`
-	Value        pgtype.Numeric `json:"value"`
-	DefinitionID int32          `json:"definition_id"`
+	Name           string         `json:"name"`
+	Value          pgtype.Numeric `json:"value"`
+	Distance       pgtype.Numeric `json:"distance"`
+	Reps           pgtype.Int4    `json:"reps"`
+	EnableDistance bool           `json:"enable_distance"`
+	EnableReps     bool           `json:"enable_reps"`
+	DefinitionID   int32          `json:"definition_id"`
 }
 
 func (q *Queries) GetAthleteBonusLifts(ctx context.Context, athleteID int32) ([]GetAthleteBonusLiftsRow, error) {
@@ -168,7 +190,15 @@ func (q *Queries) GetAthleteBonusLifts(ctx context.Context, athleteID int32) ([]
 	items := []GetAthleteBonusLiftsRow{}
 	for rows.Next() {
 		var i GetAthleteBonusLiftsRow
-		if err := rows.Scan(&i.Name, &i.Value, &i.DefinitionID); err != nil {
+		if err := rows.Scan(
+			&i.Name,
+			&i.Value,
+			&i.Distance,
+			&i.Reps,
+			&i.EnableDistance,
+			&i.EnableReps,
+			&i.DefinitionID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -205,18 +235,23 @@ func (q *Queries) GetAthleteByID(ctx context.Context, id int32) (Athlete, error)
 }
 
 const getBonusLiftDefinitionByName = `-- name: GetBonusLiftDefinitionByName :one
-SELECT id, name FROM bonus_lift_definitions WHERE name = $1
+SELECT id, name, enable_distance, enable_reps FROM bonus_lift_definitions WHERE name = $1
 `
 
 func (q *Queries) GetBonusLiftDefinitionByName(ctx context.Context, name string) (BonusLiftDefinition, error) {
 	row := q.db.QueryRow(ctx, getBonusLiftDefinitionByName, name)
 	var i BonusLiftDefinition
-	err := row.Scan(&i.ID, &i.Name)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.EnableDistance,
+		&i.EnableReps,
+	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.id, s.user_id, s.expires_at, s.created_at, u.username, u.athlete_id
+SELECT s.id, s.user_id, s.expires_at, s.created_at, u.username, u.athlete_id, u.role
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.id = $1 AND s.expires_at > NOW()
@@ -229,6 +264,7 @@ type GetSessionRow struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	Username  string             `json:"username"`
 	AthleteID pgtype.Int4        `json:"athlete_id"`
+	Role      string             `json:"role"`
 }
 
 func (q *Queries) GetSession(ctx context.Context, id string) (GetSessionRow, error) {
@@ -241,12 +277,13 @@ func (q *Queries) GetSession(ctx context.Context, id string) (GetSessionRow, err
 		&i.CreatedAt,
 		&i.Username,
 		&i.AthleteID,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password, athlete_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, username, password, athlete_id, created_at, updated_at, role FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
@@ -259,12 +296,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.AthleteID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password, athlete_id, created_at, updated_at FROM users WHERE username = $1
+SELECT id, username, password, athlete_id, created_at, updated_at, role FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -277,6 +315,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.AthleteID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -320,40 +359,59 @@ func (q *Queries) ListAthletes(ctx context.Context) ([]Athlete, error) {
 }
 
 const listAthletesByBonusLift = `-- name: ListAthletesByBonusLift :many
-SELECT a.id, a.name, a.gender, a.body_weight, a.avatar_url, a.squat, a.bench, a.deadlift, a.total, a.ohp, a.created_at, a.updated_at, a.bio, abl.value as lift_value, bld.name as lift_name
-FROM athletes a
-JOIN athlete_bonus_lifts abl ON a.id = abl.athlete_id
-JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
-WHERE bld.id = $1
-AND (a.gender = $2 OR $2 = '')
-ORDER BY abl.value DESC
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio, lift_value, lift_name, lift_weight, lift_distance, lift_reps
+FROM (
+    SELECT a.id, a.name, a.gender, a.body_weight, a.avatar_url, a.squat, a.bench, a.deadlift, a.total, a.ohp, a.created_at, a.updated_at, a.bio,
+           CAST(
+               CASE
+                   WHEN $3::text = 'distance' THEN abl.distance
+                   WHEN $3::text = 'reps' THEN abl.reps::numeric
+                   ELSE abl.value
+               END AS numeric
+           ) AS lift_value,
+           bld.name AS lift_name,
+           abl.value AS lift_weight,
+           abl.distance AS lift_distance,
+           abl.reps AS lift_reps
+    FROM athletes a
+    JOIN athlete_bonus_lifts abl ON a.id = abl.athlete_id
+    JOIN bonus_lift_definitions bld ON abl.lift_definition_id = bld.id
+    WHERE bld.id = $1
+      AND (a.gender = $2 OR $2 = '')
+) t
+WHERE t.lift_value IS NOT NULL
+ORDER BY t.lift_value DESC
 `
 
 type ListAthletesByBonusLiftParams struct {
 	ID     int32       `json:"id"`
 	Gender pgtype.Text `json:"gender"`
+	Metric string      `json:"metric"`
 }
 
 type ListAthletesByBonusLiftRow struct {
-	ID         int32              `json:"id"`
-	Name       string             `json:"name"`
-	Gender     pgtype.Text        `json:"gender"`
-	BodyWeight pgtype.Numeric     `json:"body_weight"`
-	AvatarUrl  pgtype.Text        `json:"avatar_url"`
-	Squat      pgtype.Numeric     `json:"squat"`
-	Bench      pgtype.Numeric     `json:"bench"`
-	Deadlift   pgtype.Numeric     `json:"deadlift"`
-	Total      pgtype.Numeric     `json:"total"`
-	Ohp        pgtype.Numeric     `json:"ohp"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	Bio        pgtype.Text        `json:"bio"`
-	LiftValue  pgtype.Numeric     `json:"lift_value"`
-	LiftName   string             `json:"lift_name"`
+	ID          int32              `json:"id"`
+	Name        string             `json:"name"`
+	Gender      pgtype.Text        `json:"gender"`
+	BodyWeight  pgtype.Numeric     `json:"body_weight"`
+	AvatarUrl   pgtype.Text        `json:"avatar_url"`
+	Squat       pgtype.Numeric     `json:"squat"`
+	Bench       pgtype.Numeric     `json:"bench"`
+	Deadlift    pgtype.Numeric     `json:"deadlift"`
+	Total       pgtype.Numeric     `json:"total"`
+	Ohp         pgtype.Numeric     `json:"ohp"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Bio         pgtype.Text        `json:"bio"`
+	LiftValue   pgtype.Numeric     `json:"lift_value"`
+	LiftName    string             `json:"lift_name"`
+	LiftWeight  pgtype.Numeric     `json:"lift_weight"`
+	LiftDistance pgtype.Numeric    `json:"lift_distance"`
+	LiftReps    pgtype.Int4        `json:"lift_reps"`
 }
 
 func (q *Queries) ListAthletesByBonusLift(ctx context.Context, arg ListAthletesByBonusLiftParams) ([]ListAthletesByBonusLiftRow, error) {
-	rows, err := q.db.Query(ctx, listAthletesByBonusLift, arg.ID, arg.Gender)
+	rows, err := q.db.Query(ctx, listAthletesByBonusLift, arg.ID, arg.Gender, arg.Metric)
 	if err != nil {
 		return nil, err
 	}
@@ -377,6 +435,9 @@ func (q *Queries) ListAthletesByBonusLift(ctx context.Context, arg ListAthletesB
 			&i.Bio,
 			&i.LiftValue,
 			&i.LiftName,
+			&i.LiftWeight,
+			&i.LiftDistance,
+			&i.LiftReps,
 		); err != nil {
 			return nil, err
 		}
@@ -521,7 +582,7 @@ func (q *Queries) ListAthletesSortedByGender(ctx context.Context, arg ListAthlet
 }
 
 const listBonusLiftDefinitions = `-- name: ListBonusLiftDefinitions :many
-SELECT id, name FROM bonus_lift_definitions ORDER BY name ASC
+SELECT id, name, enable_distance, enable_reps FROM bonus_lift_definitions ORDER BY name ASC
 `
 
 func (q *Queries) ListBonusLiftDefinitions(ctx context.Context) ([]BonusLiftDefinition, error) {
@@ -533,7 +594,12 @@ func (q *Queries) ListBonusLiftDefinitions(ctx context.Context) ([]BonusLiftDefi
 	items := []BonusLiftDefinition{}
 	for rows.Next() {
 		var i BonusLiftDefinition
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.EnableDistance,
+			&i.EnableReps,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -609,18 +675,27 @@ func (q *Queries) UpdateAthlete(ctx context.Context, arg UpdateAthleteParams) (A
 }
 
 const upsertAthleteBonusLift = `-- name: UpsertAthleteBonusLift :exec
-INSERT INTO athlete_bonus_lifts (athlete_id, lift_definition_id, value)
-VALUES ($1, $2, $3)
-ON CONFLICT (athlete_id, lift_definition_id) DO UPDATE SET value = $3
+INSERT INTO athlete_bonus_lifts (athlete_id, lift_definition_id, value, distance, reps)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (athlete_id, lift_definition_id)
+DO UPDATE SET value = $3, distance = $4, reps = $5
 `
 
 type UpsertAthleteBonusLiftParams struct {
 	AthleteID        int32          `json:"athlete_id"`
 	LiftDefinitionID int32          `json:"lift_definition_id"`
 	Value            pgtype.Numeric `json:"value"`
+	Distance         pgtype.Numeric `json:"distance"`
+	Reps             pgtype.Int4    `json:"reps"`
 }
 
 func (q *Queries) UpsertAthleteBonusLift(ctx context.Context, arg UpsertAthleteBonusLiftParams) error {
-	_, err := q.db.Exec(ctx, upsertAthleteBonusLift, arg.AthleteID, arg.LiftDefinitionID, arg.Value)
+	_, err := q.db.Exec(ctx, upsertAthleteBonusLift,
+		arg.AthleteID,
+		arg.LiftDefinitionID,
+		arg.Value,
+		arg.Distance,
+		arg.Reps,
+	)
 	return err
 }

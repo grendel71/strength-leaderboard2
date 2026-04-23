@@ -1,0 +1,108 @@
+{{define "leaderboard_table"}}
+{{$gender := .Gender}}
+{{$sort := .Sort}}
+<div id="leaderboard-table" class="fade-in">
+    <!-- Featured Podium for Top 3 -->
+    {{if ge (len .Athletes) 3}}
+    <div class="podium">
+        <div class="podium-item podium-2">
+            {{if has (index .Athletes 1).AvatarUrl}}<img 
+                src="{{avatar (index .Athletes 1).AvatarUrl}}" 
+                alt="{{(index .Athletes 1).Name}}" 
+                class="podium-avatar clickable"
+                onclick="showProfile({{(index .Athletes 1).ID}})"
+            />{{end}}
+            <div class="podium-medal">🥈</div>
+            <a href="/athlete/{{(index .Athletes 1).ID}}" class="podium-name">{{(index .Athletes 1).Name}}</a>
+            <div class="podium-total">{{decimal (index .Athletes 1).Total}}</div>
+        </div>
+        <div class="podium-item podium-1">
+            {{if has (index .Athletes 0).AvatarUrl}}<img 
+                src="{{avatar (index .Athletes 0).AvatarUrl}}" 
+                alt="{{(index .Athletes 0).Name}}" 
+                class="podium-avatar clickable"
+                onclick="showProfile({{(index .Athletes 0).ID}})"
+            /><span class="podium-avatar-placeholder" onclick="showProfile({{(index .Athletes 0).ID}})" style="display:none">{{slice (index .Athletes 0).Name 0 1}}</span>{{end}}
+            <div class="podium-medal">🥇</div>
+            <a href="/athlete/{{(index .Athletes 0).ID}}" class="podium-name">{{(index .Athletes 0).Name}}</a>
+            <div class="podium-total">{{decimal (index .Athletes 0).Total}}</div>
+        </div>
+        <div class="podium-item podium-3">
+            {{if has (index .Athletes 2).AvatarUrl}}<img 
+                src="{{avatar (index .Athletes 2).AvatarUrl}}" 
+                alt="{{(index .Athletes 2).Name}}" 
+                class="podium-avatar clickable"
+                onclick="showProfile({{(index .Athletes 2).ID}})"
+            />{{end}}
+            <div class="podium-medal">🥉</div>
+            <a href="/athlete/{{(index .Athletes 2).ID}}" class="podium-name">{{(index .Athletes 2).Name}}</a>
+            <div class="podium-total">{{decimal (index .Athletes 2).Total}}</div>
+        </div>
+    </div>
+    {{end}}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th>Athlete</th>
+                    <th>BW</th>
+                    <th class="sortable {{if eq .Sort "squat"}}active{{end}}"
+                        hx-get="/leaderboard?sort=squat&gender={{.Gender}}"
+                        hx-target="#leaderboard-table" hx-swap="outerHTML">
+                        Squat
+                    </th>
+                    <th class="sortable {{if eq .Sort "bench"}}active{{end}}"
+                        hx-get="/leaderboard?sort=bench&gender={{.Gender}}"
+                        hx-target="#leaderboard-table" hx-swap="outerHTML">
+                        Bench
+                    </th>
+                    <th class="sortable {{if eq .Sort "deadlift"}}active{{end}}"
+                        hx-get="/leaderboard?sort=deadlift&gender={{.Gender}}"
+                        hx-target="#leaderboard-table" hx-swap="outerHTML">
+                        Deadlift
+                    </th>
+                    <th class="sortable {{if eq .Sort "total"}}active{{end}}"
+                        hx-get="/leaderboard?sort=total&gender={{.Gender}}"
+                        hx-target="#leaderboard-table" hx-swap="outerHTML">
+                        Total
+                    </th>
+                    <th class="sortable {{if eq .Sort "ohp"}}active{{end}}"
+                        hx-get="/leaderboard?sort=ohp&gender={{.Gender}}"
+                        hx-target="#leaderboard-table" hx-swap="outerHTML">
+                        OHP
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $i, $a := .Athletes}}
+                <tr>
+                    <td class="rank">{{rank $i}}</td>
+                    <td>
+                        {{if has $a.AvatarUrl}}<img 
+                            src="{{avatar $a.AvatarUrl}}" 
+                            alt="{{$a.Name}}" 
+                            class="avatar clickable"
+                            onclick="showProfile({{$a.ID}})"
+                        />{{end}}
+                        <a href="/athlete/{{$a.ID}}" class="athlete-name">{{$a.Name}}</a>
+                        <span class="gender-tag">{{gender $a.Gender}}</span>
+                    </td>
+                    <td class="mono dim">{{decimal $a.BodyWeight}}</td>
+                    <td class="mono">{{decimal $a.Squat}}</td>
+                    <td class="mono">{{decimal $a.Bench}}</td>
+                    <td class="mono">{{decimal $a.Deadlift}}</td>
+                    <td class="mono highlight">{{decimal $a.Total}}</td>
+                    <td class="mono">{{decimal $a.Ohp}}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="8" class="empty">No athletes found</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

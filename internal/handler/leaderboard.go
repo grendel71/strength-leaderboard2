@@ -32,6 +32,7 @@ func (h *LeaderboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 
 	data := pageData{
 		User:     auth.UserFromContext(r.Context()),
+		IsHTMX:   r.Header.Get("HX-Request") == "true",
 		Athletes: athletes,
 		Sort:     sort,
 		Gender:   gender,
@@ -49,6 +50,10 @@ func (h *LeaderboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 func (h *LeaderboardHandler) BonusIndex(w http.ResponseWriter, r *http.Request) {
 	liftIDStr := r.URL.Query().Get("lift_id")
 	gender := r.URL.Query().Get("gender")
+	metric := r.URL.Query().Get("metric")
+	if metric == "" {
+		metric = "weight"
+	}
 
 	allBonusLifts, _ := h.queries.ListBonusLiftDefinitions(r.Context())
 
@@ -60,6 +65,30 @@ func (h *LeaderboardHandler) BonusIndex(w http.ResponseWriter, r *http.Request) 
 		selectedLiftID = allBonusLifts[0].ID
 	}
 
+	var selectedEnableDistance bool
+	var selectedEnableReps bool
+	for _, l := range allBonusLifts {
+		if l.ID == selectedLiftID {
+			selectedEnableDistance = l.EnableDistance
+			selectedEnableReps = l.EnableReps
+			break
+		}
+	}
+
+	// Enforce metric selection based on lift definition.
+	switch metric {
+	case "distance":
+		if !selectedEnableDistance {
+			metric = "weight"
+		}
+	case "reps":
+		if !selectedEnableReps {
+			metric = "weight"
+		}
+	default:
+		metric = "weight"
+	}
+
 	var bonusAthletes []db.ListAthletesByBonusLiftRow
 	var liftName string
 	if selectedLiftID > 0 {
@@ -67,6 +96,7 @@ func (h *LeaderboardHandler) BonusIndex(w http.ResponseWriter, r *http.Request) 
 		bonusAthletes, err = h.queries.ListAthletesByBonusLift(r.Context(), db.ListAthletesByBonusLiftParams{
 			ID:     selectedLiftID,
 			Gender: pgtype.Text{String: gender, Valid: true},
+			Metric: metric,
 		})
 		if err == nil && len(bonusAthletes) > 0 {
 			liftName = bonusAthletes[0].LiftName
@@ -82,12 +112,16 @@ func (h *LeaderboardHandler) BonusIndex(w http.ResponseWriter, r *http.Request) 
 	}
 
 	data := pageData{
-		User:                auth.UserFromContext(r.Context()),
-		BonusAthletes:       bonusAthletes,
-		AllBonusLifts:       allBonusLifts,
-		SelectedBonusLiftID: selectedLiftID,
-		BonusLiftName:       liftName,
-		Gender:              gender,
+		User:                            auth.UserFromContext(r.Context()),
+		IsHTMX:                          r.Header.Get("HX-Request") == "true",
+		BonusAthletes:                   bonusAthletes,
+		AllBonusLifts:                   allBonusLifts,
+		SelectedBonusLiftID:             selectedLiftID,
+		SelectedBonusLiftEnableDistance: selectedEnableDistance,
+		SelectedBonusLiftEnableReps:     selectedEnableReps,
+		BonusLiftMetric:                 metric,
+		BonusLiftName:                   liftName,
+		Gender:                          gender,
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.URL.Path == "/other" {

@@ -1,0 +1,18 @@
+{{define "nav"}}
+<nav class="nav">
+  <a href="/" class="nav-brand">Strength Leaderboard</a>
+  <div class="nav-links">
+    <a href="/">Main</a>
+    <a href="/other">Other Lifts</a>
+    {{if .User}}
+    <a href="/profile/edit">{{.User.Username}}</a>
+    <form method="POST" action="/logout" style="margin: 0">
+      <button type="submit" class="btn-danger">Logout</button>
+    </form>
+    {{else}}
+    <a href="/login">Login</a>
+    <a href="/register" class="btn-primary">Sign Up</a>
+    {{end}}
+  </div>
+</nav>
+{{end}}

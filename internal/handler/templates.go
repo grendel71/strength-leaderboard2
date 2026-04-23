@@ -15,12 +15,16 @@ import (
 var templates map[string]*template.Template
 
 var funcMap = template.FuncMap{
-	"decimal": formatDecimal,
-	"rank":    func(i int) int { return i + 1 },
-	"gender": func(t pgtype.Text) string { return t.String },
-	"avatar": func(t pgtype.Text) string { return t.String },
-	"has":    func(t pgtype.Text) bool { return t.Valid && t.String != "" },
-	"md":     func(s string) template.HTML { return template.HTML(markdown.ToHTML([]byte(s), nil, nil)) },
+	"decimal":   formatDecimal,
+	"int4":     formatInt4,
+	"rank":     func(i int) int { return i + 1 },
+	"gender":   func(t pgtype.Text) string { return t.String },
+	"avatar":   func(t pgtype.Text) string { return t.String },
+	"has":      func(t pgtype.Text) bool { return t.Valid && t.String != "" },
+	"isAdmin":  func(u *auth.SessionUser) bool { return u != nil && u.Role == "admin" },
+	"md":       func(s string) template.HTML { return template.HTML(markdown.ToHTML([]byte(s), nil, nil)) },
+	"add":      func(a, b int) int { return a + b },
+	"boolToInt": func(b bool) int { if b { return 1 }; return 0 },
 }
 
 func InitTemplates(templateFS fs.FS) {
@@ -76,20 +80,31 @@ func formatDecimal(n pgtype.Numeric) string {
 	return fmt.Sprintf("%.1f", fl.Float64)
 }
 
+func formatInt4(n pgtype.Int4) string {
+	if !n.Valid {
+		return "-"
+	}
+	return fmt.Sprintf("%d", n.Int32)
+}
+
 type pageData struct {
-	User                *auth.SessionUser
-	Athletes            []db.Athlete
-	Athlete             *db.Athlete
-	Sort                string
-	Gender              string
-	Error               string
-	Success             string
-	Dialog              bool
-	BonusLifts          []db.GetAthleteBonusLiftsRow
-	AllBonusLifts       []db.BonusLiftDefinition
-	BonusAthletes       []db.ListAthletesByBonusLiftRow
-	SelectedBonusLiftID int32
-	BonusLiftName       string
+	User                            *auth.SessionUser
+	IsHTMX                          bool
+	Athletes                        []db.Athlete
+	Athlete                         *db.Athlete
+	Sort                            string
+	Gender                          string
+	Error                           string
+	Success                         string
+	Dialog                          bool
+	BonusLifts                      []db.GetAthleteBonusLiftsRow
+	AllBonusLifts                   []db.BonusLiftDefinition
+	BonusAthletes                   []db.ListAthletesByBonusLiftRow
+	SelectedBonusLiftID             int32
+	SelectedBonusLiftEnableDistance bool
+	SelectedBonusLiftEnableReps     bool
+	BonusLiftMetric                 string
+	BonusLiftName                   string
 }
 
 func renderPage(w http.ResponseWriter, name string, data pageData) {

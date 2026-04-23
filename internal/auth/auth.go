@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	sessionCookie  = "session_id"
-	sessionMaxAge  = 30 * 24 * time.Hour // 30 days
-	bcryptCost     = 12
+	sessionCookie = "session_id"
+	sessionMaxAge = 30 * 24 * time.Hour // 30 days
+	bcryptCost    = 12
 )
 
 type contextKey string
@@ -25,6 +25,7 @@ const userContextKey contextKey = "user"
 type SessionUser struct {
 	UserID    int32
 	Username  string
+	Role      string
 	AthleteID pgtype.Int4
 }
 
@@ -101,6 +102,7 @@ func Middleware(queries *db.Queries) func(http.Handler) http.Handler {
 					r = r.WithContext(WithUser(r.Context(), &SessionUser{
 						UserID:    sess.UserID.Int32,
 						Username:  sess.Username,
+						Role:      sess.Role,
 						AthleteID: sess.AthleteID,
 					}))
 				}
