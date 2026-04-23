@@ -29,12 +29,12 @@ var staticFS embed.FS
 
 func main() {
 	cfg := config.Load()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+	if cfg.DBHost == "" || cfg.DBUser == "" || cfg.DBName == "" {
+		log.Fatal("DB_HOST, DB_USER, and DB_NAME are required")
 	}
 
 	// Database
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL())
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
