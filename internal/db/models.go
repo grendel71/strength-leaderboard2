@@ -21,6 +21,7 @@ type Athlete struct {
 	Ohp        pgtype.Numeric     `json:"ohp"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Bio        pgtype.Text        `json:"bio"`
 }
 
 type Session struct {

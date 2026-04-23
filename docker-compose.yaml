@@ -10,11 +10,39 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./migrations/001_initial.up.sql:/docker-entrypoint-initdb.d/001_initial.sql
+      - ./migrations/002_bio.up.sql:/docker-entrypoint-initdb.d/002_bio.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leaderboard"]
       interval: 2s
       timeout: 5s
       retries: 5
+
+  # SeaweedFS
+  master:
+    image: chrislusf/seaweedfs
+    command: master
+    ports:
+      - "9333:9333"
+  volume:
+    image: chrislusf/seaweedfs
+    command: volume -mserver="master:9333" -port=8080
+    depends_on:
+      - master
+  filer:
+    image: chrislusf/seaweedfs
+    command: filer -master="master:9333"
+    ports:
+      - "8888:8888"
+    depends_on:
+      - master
+      - volume
+  s3:
+    image: chrislusf/seaweedfs
+    command: s3 -filer="filer:8888"
+    ports:
+      - "8333:8333"
+    depends_on:
+      - filer
 
   app:
     build: .
@@ -23,9 +51,17 @@ services:
     environment:
       DATABASE_URL: postgres://leaderboard:leaderboard@db:5432/leaderboard?sslmode=disable
       PORT: "3000"
+      S3_ENDPOINT: http://s3:8333
+      S3_REGION: us-east-1
+      S3_BUCKET: profiles
+      S3_ACCESS_KEY: any
+      S3_SECRET_KEY: any
+      S3_PUBLIC_URL: http://localhost:8333
     depends_on:
       db:
         condition: service_healthy
+      s3:
+        condition: service_started
 
 volumes:
   pgdata:

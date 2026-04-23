@@ -37,11 +37,12 @@ UPDATE athletes SET
     gender = $3,
     body_weight = $4,
     avatar_url = $5,
-    squat = $6,
-    bench = $7,
-    deadlift = $8,
-    total = $9,
-    ohp = $10,
+    bio = $6,
+    squat = $7,
+    bench = $8,
+    deadlift = $9,
+    total = $10,
+    ohp = $11,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;

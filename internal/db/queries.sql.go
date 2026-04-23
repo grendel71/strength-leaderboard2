@@ -14,7 +14,7 @@ import (
 const createAthlete = `-- name: CreateAthlete :one
 INSERT INTO athletes (name, gender, body_weight, squat, bench, deadlift, total, ohp)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at
+RETURNING id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio
 `
 
 type CreateAthleteParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) CreateAthlete(ctx context.Context, arg CreateAthleteParams) (A
 		&i.Ohp,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -118,7 +119,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getAthleteByID = `-- name: GetAthleteByID :one
-SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at FROM athletes WHERE id = $1
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio FROM athletes WHERE id = $1
 `
 
 func (q *Queries) GetAthleteByID(ctx context.Context, id int32) (Athlete, error) {
@@ -137,6 +138,7 @@ func (q *Queries) GetAthleteByID(ctx context.Context, id int32) (Athlete, error)
 		&i.Ohp,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -208,7 +210,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const listAthletes = `-- name: ListAthletes :many
-SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at FROM athletes ORDER BY total DESC NULLS LAST
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio FROM athletes ORDER BY total DESC NULLS LAST
 `
 
 func (q *Queries) ListAthletes(ctx context.Context) ([]Athlete, error) {
@@ -233,6 +235,7 @@ func (q *Queries) ListAthletes(ctx context.Context) ([]Athlete, error) {
 			&i.Ohp,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Bio,
 		); err != nil {
 			return nil, err
 		}
@@ -245,7 +248,7 @@ func (q *Queries) ListAthletes(ctx context.Context) ([]Athlete, error) {
 }
 
 const listAthletesByGender = `-- name: ListAthletesByGender :many
-SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at FROM athletes WHERE gender = $1 ORDER BY total DESC NULLS LAST
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio FROM athletes WHERE gender = $1 ORDER BY total DESC NULLS LAST
 `
 
 func (q *Queries) ListAthletesByGender(ctx context.Context, gender pgtype.Text) ([]Athlete, error) {
@@ -270,6 +273,7 @@ func (q *Queries) ListAthletesByGender(ctx context.Context, gender pgtype.Text) 
 			&i.Ohp,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Bio,
 		); err != nil {
 			return nil, err
 		}
@@ -282,7 +286,7 @@ func (q *Queries) ListAthletesByGender(ctx context.Context, gender pgtype.Text) 
 }
 
 const listAthletesSorted = `-- name: ListAthletesSorted :many
-SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at FROM athletes
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio FROM athletes
 ORDER BY
     CASE WHEN $1::text = 'squat' THEN squat END DESC NULLS LAST,
     CASE WHEN $1::text = 'bench' THEN bench END DESC NULLS LAST,
@@ -313,6 +317,7 @@ func (q *Queries) ListAthletesSorted(ctx context.Context, sortField string) ([]A
 			&i.Ohp,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Bio,
 		); err != nil {
 			return nil, err
 		}
@@ -325,7 +330,7 @@ func (q *Queries) ListAthletesSorted(ctx context.Context, sortField string) ([]A
 }
 
 const listAthletesSortedByGender = `-- name: ListAthletesSortedByGender :many
-SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at FROM athletes
+SELECT id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio FROM athletes
 WHERE gender = $1
 ORDER BY
     CASE WHEN $2::text = 'squat' THEN squat END DESC NULLS LAST,
@@ -362,6 +367,7 @@ func (q *Queries) ListAthletesSortedByGender(ctx context.Context, arg ListAthlet
 			&i.Ohp,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Bio,
 		); err != nil {
 			return nil, err
 		}
@@ -379,14 +385,15 @@ UPDATE athletes SET
     gender = $3,
     body_weight = $4,
     avatar_url = $5,
-    squat = $6,
-    bench = $7,
-    deadlift = $8,
-    total = $9,
-    ohp = $10,
+    bio = $6,
+    squat = $7,
+    bench = $8,
+    deadlift = $9,
+    total = $10,
+    ohp = $11,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at
+RETURNING id, name, gender, body_weight, avatar_url, squat, bench, deadlift, total, ohp, created_at, updated_at, bio
 `
 
 type UpdateAthleteParams struct {
@@ -395,6 +402,7 @@ type UpdateAthleteParams struct {
 	Gender     pgtype.Text    `json:"gender"`
 	BodyWeight pgtype.Numeric `json:"body_weight"`
 	AvatarUrl  pgtype.Text    `json:"avatar_url"`
+	Bio        pgtype.Text    `json:"bio"`
 	Squat      pgtype.Numeric `json:"squat"`
 	Bench      pgtype.Numeric `json:"bench"`
 	Deadlift   pgtype.Numeric `json:"deadlift"`
@@ -409,6 +417,7 @@ func (q *Queries) UpdateAthlete(ctx context.Context, arg UpdateAthleteParams) (A
 		arg.Gender,
 		arg.BodyWeight,
 		arg.AvatarUrl,
+		arg.Bio,
 		arg.Squat,
 		arg.Bench,
 		arg.Deadlift,
@@ -429,6 +438,7 @@ func (q *Queries) UpdateAthlete(ctx context.Context, arg UpdateAthleteParams) (A
 		&i.Ohp,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Bio,
 	)
 	return i, err
 }

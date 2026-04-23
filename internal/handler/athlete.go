@@ -1,22 +1,27 @@
 package handler
 
 import (
+	"fmt"
 	"math/big"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/blau/strength-leaderboard2/internal/auth"
 	"github.com/blau/strength-leaderboard2/internal/db"
+	"github.com/blau/strength-leaderboard2/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AthleteHandler struct {
 	queries *db.Queries
+	storage *storage.S3Storage
 }
 
-func NewAthleteHandler(q *db.Queries) *AthleteHandler {
-	return &AthleteHandler{queries: q}
+func NewAthleteHandler(q *db.Queries, s *storage.S3Storage) *AthleteHandler {
+	return &AthleteHandler{queries: q, storage: s}
 }
 
 func (h *AthleteHandler) View(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +35,16 @@ func (h *AthleteHandler) View(w http.ResponseWriter, r *http.Request) {
 	athlete, err := h.queries.GetAthleteByID(r.Context(), int32(id))
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	// HTMX requests get just the profile card for dialog
+	if r.Header.Get("HX-Request") == "true" {
+		renderPartial(w, "profile_card", pageData{
+			User:     auth.UserFromContext(r.Context()),
+			Athlete:  &athlete,
+			Dialog:   true,
+		})
 		return
 	}
 
@@ -65,9 +80,25 @@ func (h *AthleteHandler) EditSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
+	// Increase max memory for file uploads
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
+	}
+
+	// Handle Avatar Upload
+	avatarURL := r.FormValue("avatar_url")
+	file, header, err := r.FormFile("avatar_file")
+	if err == nil {
+		defer file.Close()
+		ext := filepath.Ext(header.Filename)
+		key := fmt.Sprintf("avatars/%d_%d%s", user.AthleteID.Int32, time.Now().Unix(), ext)
+		newURL, uploadErr := h.storage.Upload(r.Context(), key, file, header.Header.Get("Content-Type"))
+		if uploadErr != nil {
+			http.Error(w, "upload failed: "+uploadErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		avatarURL = newURL
 	}
 
 	params := db.UpdateAthleteParams{
@@ -75,7 +106,8 @@ func (h *AthleteHandler) EditSave(w http.ResponseWriter, r *http.Request) {
 		Name:       r.FormValue("name"),
 		Gender:     pgtype.Text{String: r.FormValue("gender"), Valid: r.FormValue("gender") != ""},
 		BodyWeight: parseDecimal(r.FormValue("body_weight")),
-		AvatarUrl:  pgtype.Text{String: r.FormValue("avatar_url"), Valid: r.FormValue("avatar_url") != ""},
+		AvatarUrl:  pgtype.Text{String: avatarURL, Valid: avatarURL != ""},
+		Bio:        pgtype.Text{String: r.FormValue("bio"), Valid: r.FormValue("bio") != ""},
 		Squat:      parseDecimal(r.FormValue("squat")),
 		Bench:      parseDecimal(r.FormValue("bench")),
 		Deadlift:   parseDecimal(r.FormValue("deadlift")),

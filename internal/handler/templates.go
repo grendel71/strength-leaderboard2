@@ -8,6 +8,7 @@ import (
 
 	"github.com/blau/strength-leaderboard2/internal/auth"
 	"github.com/blau/strength-leaderboard2/internal/db"
+	"github.com/gomarkdown/markdown"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -16,7 +17,10 @@ var templates map[string]*template.Template
 var funcMap = template.FuncMap{
 	"decimal": formatDecimal,
 	"rank":    func(i int) int { return i + 1 },
-	"gender":  func(t pgtype.Text) string { return t.String },
+	"gender": func(t pgtype.Text) string { return t.String },
+	"avatar": func(t pgtype.Text) string { return t.String },
+	"has":    func(t pgtype.Text) bool { return t.Valid && t.String != "" },
+	"md":     func(s string) template.HTML { return template.HTML(markdown.ToHTML([]byte(s), nil, nil)) },
 }
 
 func InitTemplates(templateFS fs.FS) {
@@ -78,6 +82,7 @@ type pageData struct {
 	Gender   string
 	Error    string
 	Success  string
+	Dialog   bool
 }
 
 func renderPage(w http.ResponseWriter, name string, data pageData) {
