@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -38,20 +37,6 @@ func NewS3Storage(ctx context.Context, cfg appConfig.Config) (*S3Storage, error)
 	}
 
 	client := s3.NewFromConfig(sdkConfig)
-
-	// Ensure bucket exists
-	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{
-		Bucket: aws.String(cfg.S3Bucket),
-	})
-	if err != nil {
-		log.Printf("bucket %s does not exist, creating it...", cfg.S3Bucket)
-		_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
-			Bucket: aws.String(cfg.S3Bucket),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create bucket: %w", err)
-		}
-	}
 
 	return &S3Storage{
 		client:    client,
